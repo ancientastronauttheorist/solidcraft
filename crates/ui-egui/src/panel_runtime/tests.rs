@@ -14788,6 +14788,59 @@ fn plugin_panels_text_draft_keeps_deletion_while_an_older_ack_is_pending() {
 }
 
 #[test]
+fn plugin_panels_choice_field_emits_change_when_option_is_picked() {
+    use solidcraft_engine::plugin::ui::*;
+    let mut panel = plugin_table_snapshot();
+    panel.panel.layout.nodes = vec![Node {
+        widget: Widget::Form(FormSpec {
+            bind: "/edit".into(),
+            fields: vec![Field {
+                key: "kind".into(),
+                label: "Kind".into(),
+                kind: FieldKind::Choice,
+                choices: vec!["A".into(), "B".into()],
+                on_change: Some("set_kind".into()),
+            }],
+        }),
+    }];
+    panel.data.set_data(&[Datum { path: "/edit/kind".into(), value: UiValue::Text("A".into()) }]).unwrap();
+    panel.data.merge_frame();
+    let ctx = crate::fonts::test_context();
+    let mut actions = Vec::new();
+    let frame = |actions: &mut Vec<(String, UiEvent)>, events| {
+        crate::ui_kit::test_support::frame(&ctx, events, |ui| super::plugin::draw(ui, &panel, 0, actions, "in", 0));
+    };
+    frame(&mut actions, Vec::new());
+    let trigger = crate::scenario::rect_of("dialog:control:Kind").unwrap().center();
+    frame(&mut actions, crate::test_support::pointer(trigger, true));
+    frame(&mut actions, crate::test_support::pointer(trigger, false));
+    frame(&mut actions, Vec::new());
+    assert!(actions.is_empty(), "opening a choice dropdown must not emit a change event");
+
+    let option_a = crate::scenario::rect_of("dialog:Kind:A").unwrap().center();
+    frame(&mut actions, crate::test_support::pointer(option_a, true));
+    frame(&mut actions, crate::test_support::pointer(option_a, false));
+    frame(&mut actions, Vec::new());
+    assert!(actions.is_empty(), "picking the already-selected option must not emit a change event");
+
+    if crate::scenario::rect_of("dialog:Kind:B").is_none() {
+        let trigger = crate::scenario::rect_of("dialog:control:Kind").unwrap().center();
+        frame(&mut actions, crate::test_support::pointer(trigger, true));
+        frame(&mut actions, crate::test_support::pointer(trigger, false));
+        frame(&mut actions, Vec::new());
+    }
+    let option_b = crate::scenario::rect_of("dialog:Kind:B").unwrap().center();
+    frame(&mut actions, crate::test_support::pointer(option_b, true));
+    frame(&mut actions, crate::test_support::pointer(option_b, false));
+    assert_eq!(actions.len(), 1, "picking a different choice must dispatch one on_change action");
+    let (entry, event) = &actions[0];
+    assert_eq!(entry, "set_kind");
+    assert_eq!(event.event, EventKind::Change);
+    assert_eq!(event.path, "/edit/kind");
+    assert_eq!(event.value, Some(UiValue::Text("B".into())));
+}
+
+#[test]
 fn plugin_panels_unknown_widgets_draw_a_newer_host_placeholder() {
     let mut panel = plugin_table_snapshot();
     panel.panel.layout.nodes = vec![solidcraft_engine::plugin::ui::Node { widget: solidcraft_engine::plugin::ui::Widget::Unknown }];

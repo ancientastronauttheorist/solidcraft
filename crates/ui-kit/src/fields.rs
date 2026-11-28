@@ -1245,10 +1245,11 @@ pub fn dropdown_with_keyboard_close(ui: &mut Ui, id: &str, selected: &mut usize,
 }
 
 fn dropdown_indexed(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str], close_on_keyboard: bool) -> Response {
+    let before = *selected;
     let text = options.get(*selected).copied().map(solidcraft_ui_text::tr_label).unwrap_or("");
     let row = label(ui).to_string();
     let mut restore_focus = false;
-    let trigger = dropdown_menu(ui, id, text, |ui| {
+    let mut trigger = dropdown_menu(ui, id, text, |ui| {
         for (index, option) in options.iter().enumerate() {
             let response = ui.selectable_value(selected, index, solidcraft_ui_text::tr_label(option));
             solidcraft_ui_registry::publish_target(&format!("dialog:{row}:{option}"), response.rect);
@@ -1259,6 +1260,9 @@ fn dropdown_indexed(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str
             }
         }
     });
+    if *selected != before {
+        trigger.mark_changed();
+    }
     if restore_focus {
         trigger.request_focus();
         ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
@@ -1269,9 +1273,10 @@ fn dropdown_indexed(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str
 /// The standard dropdown with a leading application icon on the current value and each option.
 /// The text job reserves the icon's space; the native combo and selectable items own interaction.
 pub fn dropdown_icons(ui: &mut Ui, id: &str, selected: &mut usize, options: &[(&str, &str)]) -> Response {
+    let before = *selected;
     let (text, icon) = options.get(*selected).copied().unwrap_or(("", ""));
     let row = label(ui).to_owned();
-    dropdown_menu_width(ui, id, text, Some(icon), false, egui::PopupCloseBehavior::CloseOnClick, |ui| {
+    let mut trigger = dropdown_menu_width(ui, id, text, Some(icon), false, egui::PopupCloseBehavior::CloseOnClick, |ui| {
         for (index, (text, icon)) in options.iter().enumerate() {
             let response = ui.selectable_label(*selected == index, dropdown_icon_text(text));
             paint_dropdown_icon(ui, response.rect, icon);
@@ -1280,7 +1285,11 @@ pub fn dropdown_icons(ui: &mut Ui, id: &str, selected: &mut usize, options: &[(&
                 *selected = index;
             }
         }
-    })
+    });
+    if *selected != before {
+        trigger.mark_changed();
+    }
+    trigger
 }
 
 fn dropdown_icon_text(text: &str) -> egui::text::LayoutJob {
@@ -1308,9 +1317,10 @@ fn paint_dropdown_icon(ui: &Ui, rect: egui::Rect, icon: &str) {
 /// for that option's index, so a choice can be seen before it is picked. Tokens: dropdown tokens,
 /// the tooltip frame.
 pub fn dropdown_previews(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str], preview: impl Fn(&mut Ui, usize)) -> Response {
+    let before = *selected;
     let text = options.get(*selected).copied().map(solidcraft_ui_text::tr_label).unwrap_or("");
     let row = label(ui).to_string();
-    dropdown_menu(ui, id, text, |ui| {
+    let mut trigger = dropdown_menu(ui, id, text, |ui| {
         for (index, option) in options.iter().enumerate() {
             let response = ui.selectable_value(selected, index, solidcraft_ui_text::tr_label(option));
             solidcraft_ui_registry::publish_target(&format!("dialog:{row}:{option}"), response.rect);
@@ -1319,7 +1329,11 @@ pub fn dropdown_previews(ui: &mut Ui, id: &str, selected: &mut usize, options: &
                 solidcraft_ui_registry::publish_rect(&format!("dialog:preview:{row}:{option}"), ui.min_rect());
             });
         }
-    })
+    });
+    if *selected != before {
+        trigger.mark_changed();
+    }
+    trigger
 }
 
 /// [`dropdown`] that also says whether an option was clicked, the one already shown included (a

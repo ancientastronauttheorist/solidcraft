@@ -1809,3 +1809,53 @@ fn a_track_number_adds_up_and_a_sign_adds_to_the_value_now() {
     assert_eq!(typed("1e-3+1", 0.0), Some(1.001));
     assert_eq!(typed("abc", 1.0), None);
 }
+
+#[test]
+fn dropdown_marks_response_changed_only_when_selection_changes() {
+    for variant in ["choice_row", "dropdown_icons", "dropdown_previews"] {
+        let ctx = crate::test_support::context();
+        let selected = std::cell::Cell::new(0usize);
+        let changed = std::cell::Cell::new(false);
+        let mut draw = |ui: &mut Ui| {
+            let mut value = selected.get();
+            let response = match variant {
+                "choice_row" => crate::choice_row(ui, "Kind", "kind", &mut value, &["A", "B"]),
+                "dropdown_icons" => row(ui, "Kind", |ui| super::dropdown_icons(ui, "kind_icons", &mut value, &[("A", "a"), ("B", "b")])),
+                _ => row(ui, "Kind", |ui| super::dropdown_previews(ui, "kind_previews", &mut value, &["A", "B"], |_, _| {})),
+            };
+            selected.set(value);
+            changed.set(response.changed());
+        };
+        frame(&ctx, vec![], &mut draw);
+        assert!(!changed.get(), "{variant}: idle frame must not report changed");
+
+        // Opening the popup and picking the already-selected option must not report changed.
+        let trigger = registry::handle_at("dialog:Kind").unwrap();
+        frame(&ctx, pointer(trigger, true), &mut draw);
+        frame(&ctx, pointer(trigger, false), &mut draw);
+        frame(&ctx, vec![], &mut draw);
+        assert!(!changed.get(), "{variant}: opening the dropdown must not report changed");
+        let option_a = registry::handle_at("dialog:Kind:A").unwrap();
+        frame(&ctx, pointer(option_a, true), &mut draw);
+        frame(&ctx, pointer(option_a, false), &mut draw);
+        assert!(!changed.get(), "{variant}: re-picking the active option must not report changed");
+        assert_eq!(selected.get(), 0, "{variant}: active option stays selected");
+        frame(&ctx, vec![], &mut draw);
+
+        // Re-opening and picking a different option must mark the returned Response changed.
+        if registry::handle_at("dialog:Kind:B").is_none() {
+            let trigger = registry::handle_at("dialog:Kind").unwrap();
+            frame(&ctx, pointer(trigger, true), &mut draw);
+            frame(&ctx, pointer(trigger, false), &mut draw);
+            frame(&ctx, vec![], &mut draw);
+        }
+        let option_b = registry::handle_at("dialog:Kind:B").unwrap();
+        frame(&ctx, pointer(option_b, true), &mut draw);
+        frame(&ctx, pointer(option_b, false), &mut draw);
+        assert!(changed.get(), "{variant}: picking a different option must mark response changed");
+        assert_eq!(selected.get(), 1, "{variant}: picked option updates selected index");
+
+        frame(&ctx, vec![], &mut draw);
+        assert!(!changed.get(), "{variant}: subsequent idle frame clears changed");
+    }
+}
